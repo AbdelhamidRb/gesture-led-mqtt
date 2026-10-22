@@ -1,0 +1,221 @@
+[
+  {
+    "id": "tab_gesture_led_v2",
+    "type": "tab",
+    "label": "Contrôle d'Accès LED (Geste)",
+    "disabled": false,
+    "info": "Flux Node-RED pour le système de contrôle d'accès par geste (OpenCV, MediaPipe & MQTT)"
+  },
+  {
+    "id": "broker_public_mosquitto_unique",
+    "type": "mqtt-broker",
+    "name": "Mosquitto Public (test.mosquitto.org)",
+    "broker": "test.mosquitto.org",
+    "port": "1883",
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthPayload": "",
+    "closeTopic": "",
+    "closeQos": "0",
+    "closePayload": "",
+    "willTopic": "",
+    "willQos": "0",
+    "willPayload": ""
+  },
+  {
+    "id": "mqtt_in_led_status_v2",
+    "type": "mqtt in",
+    "z": "tab_gesture_led_v2",
+    "name": "Topic: idet/led/status",
+    "topic": "idet/led/status",
+    "qos": "0",
+    "datatype": "utf8",
+    "broker": "broker_public_mosquitto_unique",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 150,
+    "y": 140,
+    "wires": [
+      [
+        "debug_mqtt_payload_v2",
+        "fn_process_status_v2",
+        "fn_store_context_v2"
+      ]
+    ]
+  },
+  {
+    "id": "debug_mqtt_payload_v2",
+    "type": "debug",
+    "z": "tab_gesture_led_v2",
+    "name": "Console Débogage",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "payload",
+    "statusType": "auto",
+    "x": 430,
+    "y": 80,
+    "wires": []
+  },
+  {
+    "id": "fn_process_status_v2",
+    "type": "function",
+    "z": "tab_gesture_led_v2",
+    "name": "Traitement Logique Métier",
+    "func": "const state = (msg.payload || \"\").trim().toUpperCase();\nconst now = new Date();\nconst timeStr = now.toLocaleTimeString(\"fr-FR\");\n\nif (state === \"ON\") {\n    node.status({ fill: \"green\", shape: \"dot\", text: \"LED ALLUMÉE (ON) - \" + timeStr });\n    msg.ledState = \"ON\";\n    msg.isAccessGranted = true;\n    msg.color = \"#00E646\";\n    msg.badgeText = \"ACCÈS AUTORISÉ\";\n} else {\n    node.status({ fill: \"red\", shape: \"ring\", text: \"LED ÉTEINTE (OFF) - \" + timeStr });\n    msg.ledState = \"OFF\";\n    msg.isAccessGranted = false;\n    msg.color = \"#F03232\";\n    msg.badgeText = \"ACCÈS VERROUILLÉ\";\n}\n\nmsg.timestamp = now.toISOString();\nmsg.timeStr = timeStr;\nreturn msg;",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 460,
+    "y": 140,
+    "wires": [
+      [
+        "debug_formatted_output_v2"
+      ]
+    ]
+  },
+  {
+    "id": "debug_formatted_output_v2",
+    "type": "debug",
+    "z": "tab_gesture_led_v2",
+    "name": "Statut Détaillé",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "x": 720,
+    "y": 140,
+    "wires": []
+  },
+  {
+    "id": "fn_store_context_v2",
+    "type": "function",
+    "z": "tab_gesture_led_v2",
+    "name": "Mémoriser État Global",
+    "func": "const state = (msg.payload || \"\").trim().toUpperCase();\nconst now = new Date();\nconst entry = {\n    state: state,\n    time: now.toLocaleTimeString(\"fr-FR\"),\n    date: now.toLocaleDateString(\"fr-FR\"),\n    timestamp: now.getTime()\n};\n\nglobal.set(\"lastLedState\", state);\nglobal.set(\"lastLedTime\", entry.time);\n\nlet history = global.get(\"ledHistory\") || [];\nhistory.unshift(entry);\nif (history.length > 20) {\n    history = history.slice(0, 20);\n}\nglobal.set(\"ledHistory\", history);\n\nreturn msg;",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "global.set(\"lastLedState\", \"OFF\");\nglobal.set(\"lastLedTime\", \"--:--:--\");\nglobal.set(\"ledHistory\", []);",
+    "finalize": "",
+    "libs": [],
+    "x": 450,
+    "y": 220,
+    "wires": [[]]
+  },
+  {
+    "id": "http_in_dashboard_v2",
+    "type": "http in",
+    "z": "tab_gesture_led_v2",
+    "name": "GET /led-dashboard",
+    "url": "/led-dashboard",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 150,
+    "y": 320,
+    "wires": [
+      [
+        "template_dashboard_ui_v2"
+      ]
+    ]
+  },
+  {
+    "id": "template_dashboard_ui_v2",
+    "type": "template",
+    "z": "tab_gesture_led_v2",
+    "name": "Page Web Tableau de Bord",
+    "field": "payload",
+    "fieldType": "msg",
+    "format": "html",
+    "syntax": "plain",
+    "template": "<!DOCTYPE html>\n<html lang=\"fr\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Tableau de Bord - Contrôle d'Accès par Geste (Node-RED)</title>\n    <style>\n        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }\n        body {\n            background: #0f172a;\n            color: #f8fafc;\n            display: flex;\n            flex-direction: column;\n            align-items: center;\n            justify-content: center;\n            min-height: 100vh;\n            padding: 20px;\n        }\n        .card {\n            background: #1e293b;\n            border-radius: 20px;\n            padding: 35px 30px;\n            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);\n            width: 100%;\n            max-width: 520px;\n            text-align: center;\n            border: 1px solid #334155;\n        }\n        h1 {\n            font-size: 1.35rem;\n            color: #94a3b8;\n            margin-bottom: 25px;\n            letter-spacing: 0.8px;\n            text-transform: uppercase;\n        }\n        .led-container {\n            margin: 25px 0 30px 0;\n            display: flex;\n            flex-direction: column;\n            align-items: center;\n            gap: 20px;\n        }\n        .led {\n            width: 120px;\n            height: 120px;\n            border-radius: 50%;\n            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);\n            position: relative;\n        }\n        .led.on {\n            background: radial-gradient(circle at 35% 35%, #86efac, #22c55e 60%, #15803d);\n            box-shadow: 0 0 40px #22c55e, 0 0 80px rgba(34, 197, 94, 0.6), inset 0 0 20px #bbf7d0;\n            border: 4px solid #86efac;\n        }\n        .led.off {\n            background: radial-gradient(circle at 35% 35%, #fca5a5, #ef4444 60%, #991b1b);\n            box-shadow: 0 0 15px rgba(239, 68, 68, 0.3), inset 0 0 15px #450a0a;\n            border: 4px solid #7f1d1d;\n            opacity: 0.85;\n        }\n        .status-badge {\n            font-size: 1.25rem;\n            font-weight: 700;\n            padding: 10px 28px;\n            border-radius: 9999px;\n            display: inline-block;\n            letter-spacing: 1px;\n            transition: all 0.25s ease;\n        }\n        .status-badge.on {\n            background: rgba(34, 197, 94, 0.18);\n            color: #4ade80;\n            border: 2px solid #22c55e;\n        }\n        .status-badge.off {\n            background: rgba(239, 68, 68, 0.15);\n            color: #f87171;\n            border: 2px solid #ef4444;\n        }\n        .info-grid {\n            display: grid;\n            grid-template-columns: 1fr 1fr;\n            gap: 12px;\n            margin-top: 25px;\n            text-align: left;\n        }\n        .info-box {\n            background: #0f172a;\n            padding: 14px 16px;\n            border-radius: 12px;\n            border: 1px solid #334155;\n        }\n        .info-label {\n            font-size: 0.72rem;\n            color: #64748b;\n            text-transform: uppercase;\n            margin-bottom: 5px;\n            font-weight: 600;\n            letter-spacing: 0.5px;\n        }\n        .info-value {\n            font-size: 0.95rem;\n            font-weight: 600;\n            color: #cbd5e1;\n            word-break: break-all;\n        }\n        .footer {\n            margin-top: 25px;\n            font-size: 0.8rem;\n            color: #64748b;\n            display: flex;\n            align-items: center;\n            justify-content: center;\n            gap: 8px;\n        }\n        .pulse-dot {\n            width: 8px;\n            height: 8px;\n            background: #22c55e;\n            border-radius: 50%;\n            animation: pulse 1.5s infinite;\n        }\n        @keyframes pulse {\n            0% { transform: scale(0.9); opacity: 0.7; }\n            50% { transform: scale(1.3); opacity: 1; }\n            100% { transform: scale(0.9); opacity: 0.7; }\n        }\n    </style>\n</head>\n<body>\n    <div class=\"card\">\n        <h1>Supervision Contrôle d'Accès</h1>\n        \n        <div class=\"led-container\">\n            <div id=\"ledWidget\" class=\"led off\"></div>\n            <div id=\"badgeWidget\" class=\"status-badge off\">\n                ACCÈS VERROUILLÉ (LED OFF)\n            </div>\n        </div>\n\n        <div class=\"info-grid\">\n            <div class=\"info-box\">\n                <div class=\"info-label\">Broker MQTT</div>\n                <div class=\"info-value\">test.mosquitto.org:1883</div>\n            </div>\n            <div class=\"info-box\">\n                <div class=\"info-label\">Topic Écouté</div>\n                <div class=\"info-value\">idet/led/status</div>\n            </div>\n            <div class=\"info-box\">\n                <div class=\"info-label\">Dernière MAJ</div>\n                <div id=\"lastTime\" class=\"info-value\">En attente...</div>\n            </div>\n            <div class=\"info-box\">\n                <div class=\"info-label\">Protocole</div>\n                <div class=\"info-value\">MQTT v3.1.1 / JSON API</div>\n            </div>\n        </div>\n\n        <div class=\"footer\">\n            <span class=\"pulse-dot\"></span> Synchronisation temps réel (500ms) &bull; Node-RED M2 IoT\n        </div>\n    </div>\n\n    <script>\n        async function pollStatus() {\n            try {\n                const response = await fetch('/api/led-status?t=' + Date.now());\n                if (!response.ok) return;\n                const data = await response.json();\n                \n                const isON = (data.status === 'ON');\n                const ledEl = document.getElementById('ledWidget');\n                const badgeEl = document.getElementById('badgeWidget');\n                const timeEl = document.getElementById('lastTime');\n\n                if (isON) {\n                    ledEl.className = 'led on';\n                    badgeEl.className = 'status-badge on';\n                    badgeEl.innerText = 'ACCÈS AUTORISÉ (LED ON)';\n                } else {\n                    ledEl.className = 'led off';\n                    badgeEl.className = 'status-badge off';\n                    badgeEl.innerText = 'ACCÈS VERROUILLÉ (LED OFF)';\n                }\n\n                if (data.lastUpdate) {\n                    timeEl.innerText = data.lastUpdate;\n                }\n            } catch (err) {\n                console.error('Erreur actualisation statut:', err);\n            }\n        }\n\n        // Actualisation toutes les 500 ms pour une réactivité instantanée\n        setInterval(pollStatus, 500);\n        pollStatus();\n    </script>\n</body>\n</html>",
+    "output": "str",
+    "x": 460,
+    "y": 320,
+    "wires": [
+      [
+        "http_out_dashboard_v2"
+      ]
+    ]
+  },
+  {
+    "id": "http_out_dashboard_v2",
+    "type": "http response",
+    "z": "tab_gesture_led_v2",
+    "name": "Réponse HTTP HTML",
+    "statusCode": "200",
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-cache, no-store, must-revalidate"
+    },
+    "x": 730,
+    "y": 320,
+    "wires": []
+  },
+  {
+    "id": "http_in_api_status_v2",
+    "type": "http in",
+    "z": "tab_gesture_led_v2",
+    "name": "GET /api/led-status",
+    "url": "/api/led-status",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 150,
+    "y": 400,
+    "wires": [
+      [
+        "fn_api_status_v2"
+      ]
+    ]
+  },
+  {
+    "id": "fn_api_status_v2",
+    "type": "function",
+    "z": "tab_gesture_led_v2",
+    "name": "Formater JSON API",
+    "func": "msg.payload = {\n    status: global.get(\"lastLedState\") || \"OFF\",\n    lastUpdate: global.get(\"lastLedTime\") || \"--:--:--\",\n    history: global.get(\"ledHistory\") || [],\n    broker: \"test.mosquitto.org\",\n    topic: \"idet/led/status\"\n};\nreturn msg;",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 430,
+    "y": 400,
+    "wires": [
+      [
+        "http_out_api_status_v2"
+      ]
+    ]
+  },
+  {
+    "id": "http_out_api_status_v2",
+    "type": "http response",
+    "z": "tab_gesture_led_v2",
+    "name": "Réponse JSON API",
+    "statusCode": "200",
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-cache, no-store, must-revalidate"
+    },
+    "x": 730,
+    "y": 400,
+    "wires": []
+  }
+]
